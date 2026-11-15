@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SIMTELE-RISK</title>
+<style>
+:root{--bg:#f6f8fb;--card:#fff;--tx:#1b2430;--mut:#5b6777;--ac:#1F3A5F;--bd:#d5dce6;--ok:#1d7a46;--bad:#b3261e;--wa:#fff4d6}
+@media(prefers-color-scheme:dark){:root{--bg:#10151c;--card:#19212b;--tx:#e6ebf2;--mut:#9aa7b8;--ac:#7fa8e0;--bd:#2c3744;--ok:#5fcf8f;--bad:#ff8a80;--wa:#3a3320}}
+*{box-sizing:border-box}body{margin:0;font:15px/1.5 system-ui,sans-serif;background:var(--bg);color:var(--tx)}
+header{background:#1F3A5F;color:#fff;padding:12px 20px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}header h1{font-size:18px;margin:0;flex:1}
+header button{background:transparent;border:1px solid #fff8;color:#fff;border-radius:6px;padding:5px 12px;cursor:pointer}
+main{max-width:1000px;margin:0 auto;padding:20px}h2{margin:.2em 0 .5em}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:16px;margin-bottom:14px}
+.mod{cursor:pointer}.mod:hover{border-color:var(--ac)}.mod h3{margin:4px 0}.mod p{color:var(--mut);font-size:13px;margin:4px 0}.big{font-size:28px;font-weight:700;color:var(--ac)}
+input,select,textarea{font:inherit;padding:6px 8px;border-radius:6px;border:1px solid var(--bd);background:var(--card);color:var(--tx);width:100%}textarea{font-family:monospace;font-size:13px}
+label{display:block;font-size:13px;color:var(--mut);margin-bottom:2px}.f{margin-bottom:10px}.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}
+button.b{font:inherit;padding:6px 14px;border-radius:6px;border:1px solid var(--ac);background:var(--card);color:var(--ac);cursor:pointer;margin-right:6px}button.p{background:var(--ac);color:var(--bg)}button.d{border-color:var(--bad);color:var(--bad)}
+table{border-collapse:collapse;width:100%;font-size:12.5px;margin:8px 0}th,td{border:1px solid var(--bd);padding:4px 7px;text-align:right}th:first-child,td:first-child,td.l,th.l{text-align:left}th{background:var(--bg)}
+.wrap{overflow-x:auto}.ok{color:var(--ok)}.bad{color:var(--bad)}.mut{color:var(--mut);font-size:13px}.err{background:var(--wa);border:1px solid var(--bad);color:var(--bad);padding:8px 12px;border-radius:8px;margin-bottom:10px}
+.tag{display:inline-block;font-size:11px;border:1px solid var(--bd);border-radius:10px;padding:1px 8px}.two{display:grid;grid-template-columns:1fr 1fr;gap:14px}@media(max-width:700px){.two{grid-template-columns:1fr}}
+canvas{width:100%;height:240px;border:1px solid var(--bd);border-radius:8px;background:var(--card)}details{margin:4px 0}code{background:var(--bg);padding:1px 5px;border-radius:4px}
+</style></head><body>
+<header><h1>SIMTELE-RISK · Problemas y simulaciones</h1><button onclick="home()">Inicio</button><button onclick="historial()">Historial</button></header>
+<main id="app"></main>
+<script>
+const $=id=>document.getElementById(id),app=$('app');let CASOS=[];
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const NOM={NORMAL:'NORMAL',ESTRES:'ESTRÉS',MAL_CONDICIONADO:'MAL CONDICIONADO'};
+const fx=v=>v==null?'—':(typeof v==='number'?(v===0?'0':(Math.abs(v)>=1e4||Math.abs(v)<1e-3?v.toExponential(3):+v.toPrecision(6))):esc(v));
+async function api(m,u,b){let r;try{r=await fetch('/api'+u,{method:m,headers:{'Content-Type':'application/json'},body:b?JSON.stringify(b):undefined})}catch(e){throw{errores:['No hay conexión con el servidor. Inicie: python3 server.py']}}
+ const d=await r.json().catch(()=>({errores:['Respuesta inválida']}));if(!r.ok)throw d;return d}
+const showErr=e=>{const x=$('msg');if(x)x.innerHTML=(e.errores||[String(e)]).map(t=>`<div class="err">${esc(t)}</div>`).join('');window.scrollTo(0,0)};
+async function init(){try{CASOS=await api('GET','/casos');home()}catch(e){app.innerHTML=`<div class="err">${esc((e.errores||[e])[0])}<br>Abra esta página desde <code>http://127.0.0.1:8000</code> después de ejecutar <code>python3 server.py</code>.</div>`}}
+async function home(){CASOS=await api('GET','/casos');app.innerHTML='<h2>Casos de estudio</h2><p class="mut">Escenarios hipotéticos con datos sintéticos; no describen fallas reales de ninguna empresa.</p><div class="grid">'+CASOS.map(c=>`<div class="card mod" onclick="modulo(${c.id})"><h3>${c.nombre}</h3><div class="big">${c.total}</div><p>problemas guardados</p><button class="b p" onclick="event.stopPropagation();formulario(${c.id})">+ Nuevo problema</button></div>`).join('')+'</div>'}
+const ESTADO=e=>`<span class="tag ${e==='COMPLETA'?'ok':''}">${e}</span>`;
+function tablaProb(L){return L.length?`<div class="wrap"><table><tr><th class="l">#</th><th class="l">Nombre</th><th class="l">Caso</th><th class="l">Escenario</th><th class="l">Estado</th><th class="l">Fecha</th><th class="l">Acciones</th></tr>${L.map(p=>`<tr><td class="l">${p.id}</td><td class="l">${esc(p.nombre)}</td><td class="l">${esc(p.caso)}</td><td class="l">${NOM[p.tipo]}</td><td class="l">${ESTADO(p.estado)}</td><td class="l">${esc(p.fecha)}</td><td class="l"><button class="b" onclick="detalle(${p.id})">Ver</button><button class="b" onclick="formulario(${p.caso_id},${p.id})">Editar</button><button class="b d" onclick="borrar(${p.id},${p.caso_id})">Eliminar</button></td></tr>`).join('')}</table></div>`:'<p class="mut">No hay problemas guardados todavía.</p>'}
+async function modulo(id,q=''){const c=CASOS.find(x=>x.id===id),L=await api('GET','/problemas?caso='+id+'&q='+encodeURIComponent(q));
+ app.innerHTML=`<h2>${c.nombre}</h2><div class="card"><button class="b p" onclick="formulario(${id})">+ Nuevo problema</button> <input id="q" style="width:240px;display:inline-block" placeholder="Buscar…" value="${esc(q)}" onkeydown="if(event.key==='Enter')modulo(${id},this.value)"><button class="b" onclick="modulo(${id},$('q').value)">Buscar</button>${tablaProb(L)}</div>`}
+async function historial(q=''){const L=await api('GET','/problemas?q='+encodeURIComponent(q));app.innerHTML=`<h2>Historial de problemas</h2><div class="card"><input id="q" style="width:260px;display:inline-block" placeholder="Buscar por nombre, caso, escenario…" value="${esc(q)}" onkeydown="if(event.key==='Enter')historial(this.value)"><button class="b" onclick="historial($('q').value)">Buscar</button>${tablaProb(L)}</div>`}
+async function borrar(id,caso){if(!confirm('¿Eliminar este problema y todos sus resultados?'))return;await api('DELETE','/problemas/'+id);caso?modulo(caso):historial()}
+/* ---------- Formulario (crear / editar) ---------- */
+const matTxt=A=>(A||[]).map(r=>r.join(', ')).join('\n');
+async function formulario(casoId,pid){const c=CASOS.find(x=>x.id===casoId);let cur=null;if(pid)cur=await api('GET','/problemas/'+pid);
+ const pr=cur?cur.parametros:c.presets.NORMAL,tipo=cur?cur.tipo:'NORMAL';
+ const campos=c.campos.map(f=>`<div class="f"><label>${f.label} ${f.unit?'['+f.unit+']':''} <span class="mut">${f.opt?'(opcional) ':''}${f.strict?'(':'['}${f.min}, ${f.max}]</span></label><input id="p_${f.k}" type="number" step="any" value="${pr[f.k]??''}"></div>`).join('');
+ const extra=casoId===2?`<div class="two"><div class="f"><label>Matriz A (SPD, una fila por línea)</label><textarea id="p_A" rows="6">${matTxt(pr.A)}</textarea></div><div class="f"><label>Vector b</label><textarea id="p_b" rows="6">${(pr.b||[]).join('\n')}</textarea></div></div>`
+  :casoId===4?`<div class="f"><label>Función base</label><select id="p_funcion"><option value="sin" ${pr.funcion==='sin'?'selected':''}>y = sin(t)</option><option value="exp" ${pr.funcion==='exp'?'selected':''}>y = e^(−t)</option></select></div>`:'';
+ app.innerHTML=`<h2>${pid?'Editar':'Nuevo'} problema · ${c.nombre}</h2><div id="msg"></div><div class="card"><div class="cols"><div class="f"><label>Nombre</label><input id="nombre" value="${esc(cur?.nombre||'')}" maxlength="80"></div>
+ <div class="f"><label>Escenario ${pid?'':'(carga valores predefinidos)'}</label><select id="tipo" onchange="${pid?'':`preset(${casoId})`}">${Object.keys(NOM).map(k=>`<option value="${k}" ${k===tipo?'selected':''}>${NOM[k]}</option>`).join('')}</select></div>
+ <div class="f"><label>Fuente de los datos</label><input id="fuente" value="${esc(cur?.fuente_datos||'supuesto del equipo')}"></div></div>
+ <div class="cols">${campos}</div>${extra}<div class="f"><label>Notas</label><textarea id="notas" rows="2">${esc(cur?.notas||'')}</textarea></div>
+ <button class="b p" onclick="guardar(${casoId},${pid||0})">${pid?'Guardar cambios':'Guardar problema'}</button><button class="b" onclick="modulo(${casoId})">Cancelar</button>${pid?'<p class="mut">Al guardar cambios se descartan los resultados anteriores (estado PENDIENTE).</p>':''}</div>`}
+function preset(casoId){const c=CASOS.find(x=>x.id===casoId),p=c.presets[$('tipo').value];Object.entries(p).forEach(([k,v])=>{const e=$('p_'+k);if(!e)return;e.value=k==='A'?matTxt(v):k==='b'?v.join('\n'):(v??'')})}
+const parseNums=t=>t.trim().split(/[\s,;]+/).filter(Boolean).map(Number);
+async function guardar(casoId,pid){const c=CASOS.find(x=>x.id===casoId),p={},er=[];
+ c.campos.forEach(f=>{const raw=$('p_'+f.k).value.trim();if(raw===''){if(!f.opt)er.push(`${f.label}: es obligatorio.`);p[f.k]=null;return}const v=Number(raw);
+  if(!isFinite(v))er.push(`${f.label}: debe ser un número.`);else if((f.strict?v<=f.min:v<f.min)||v>f.max)er.push(`${f.label}: debe estar en ${f.strict?'(':'['}${f.min}, ${f.max}].`);p[f.k]=v});
+ if(casoId===2){p.A=$('p_A').value.trim().split('\n').filter(l=>l.trim()).map(parseNums);p.b=parseNums($('p_b').value);if(p.A.flat().concat(p.b).some(x=>!isFinite(x)))er.push('A y b deben contener solo números.')}
+ if(casoId===4)p.funcion=$('p_funcion').value;if(!$('nombre').value.trim())er.push('El nombre es obligatorio.');
+ if(er.length)return showErr({errores:er});
+ const body={caso_id:casoId,tipo:$('tipo').value,nombre:$('nombre').value,notas:$('notas').value,fuente_datos:$('fuente').value,parametros:p};
+ try{const r=pid?await api('PUT','/problemas/'+pid,body):await api('POST','/problemas',body);detalle(r.id)}catch(e){showErr(e)}}
+/* ---------- Detalle y resultados ---------- */
+let LAST=null;
+async function detalle(id,cmp){const d=await api('GET','/problemas/'+id);LAST=d;pintar(d,cmp)}
+async function ejecutar(id){try{const d=await api('POST','/problemas/'+id+'/ejecutar');LAST=d;pintar(d,d.comparacion)}catch(e){showErr(e)}}
+function kv(o){return Object.entries(o).filter(([k,v])=>v!=null&&typeof v!=='object').map(([k,v])=>`<tr><td class="l">${esc(k)}</td><td>${fx(v)}</td></tr>`).join('')}
+function pintar(d,cmp){const P=d.parametros,ej=d.ejecuciones,fila=e=>{const r=e.resumen||{},v=r.valor||{},er=r.error||{};return`<tr><td class="l">${esc(e.metodo)}</td><td class="${e.convergio?'ok':'bad'}">${e.convergio?'Sí':'No'}</td><td>${fx(v.iteraciones??(e.iteraciones.length||null))}</td><td>${fx(er.error_abs??er.error_abs_x)}</td><td>${fx(er.error_rel??er.error_rel_x)}</td><td>${fx(er.residual)}</td><td>${fx(e.tiempo_ms)}</td></tr>`};
+ const met=ej.filter(e=>e.metodo!=='REFERENCIA_ANALITICA'),ref=ej.find(e=>e.metodo==='REFERENCIA_ANALITICA');
+ let cm='';if(cmp){const mx=Math.max(0,...Object.values(cmp));cm=Object.keys(cmp).length?`<div class="card"><b>Verificación de reproducibilidad:</b> diferencia máxima entre el cálculo guardado y el recalculado = ${fx(mx)} ${mx<1e-8?'<span class="ok">✓ coincide dentro de la tolerancia (1e-8)</span>':'<span class="bad">✗ no coincide</span>'}</div>`:''}
+ const Pt=Object.entries(P).filter(([k,v])=>k!=='A'&&k!=='b').map(([k,v])=>`<tr><td class="l">${esc(k)}</td><td>${fx(v)}</td></tr>`).join('')+(P.A?`<tr><td class="l">A (${P.b.length}×${P.b.length})</td><td>${esc(P.A.map(r=>r.map(x=>+x.toPrecision(4)).join(' ')).join(' ; ')).slice(0,120)}…</td></tr>`:'');
+ app.innerHTML=`<div id="msg"></div><h2>${esc(d.nombre)} <span class="tag">${esc(d.caso)} · ${NOM[d.tipo]}</span> ${ESTADO(d.estado)}</h2>
+ <div class="card"><button class="b p" onclick="ejecutar(${d.id})">${ej.length?'Relanzar':'Ejecutar'}</button><button class="b" onclick="formulario(${d.caso_id},${d.id})">Editar</button><button class="b d" onclick="borrar(${d.id},${d.caso_id})">Eliminar</button><button class="b" onclick="modulo(${d.caso_id})">Volver al módulo</button>
+ <p class="mut">Creado: ${esc(d.fecha)} · fuente de datos: ${esc(d.fuente_datos)}${d.notas?' · Notas: '+esc(d.notas):''}</p><details><summary>Parámetros de entrada</summary><div class="wrap"><table>${Pt}</table></div></details></div>${cm}`+
+ (ej.length?`<div class="card"><h3>Resultados por método</h3><div class="wrap"><table><tr><th class="l">Método</th><th>Convergió</th><th>Iter.</th><th>Error abs</th><th>Error rel</th><th>Residual</th><th>ms</th></tr>${met.map(fila).join('')}</table></div>
+  ${ref?`<details open><summary>Referencia analítica / valores de referencia</summary><div class="wrap"><table>${kv(ref.resumen.valor)}</table></div></details>`:''}
+  ${met.filter(e=>e.iteraciones.length>1||(e.resumen?.valor?.refinamiento)).map(e=>`<details><summary>Iteraciones · ${esc(e.metodo)} (${e.iteraciones.length} guardadas)</summary><div class="wrap"><table><tr><th>n</th><th>aproximación</th><th>residual</th><th>error abs</th><th>error rel</th></tr>${[...e.iteraciones.slice(0,10),...(e.iteraciones.length>12?[{numero:'…',aproximacion:[],residual:null,error_abs:null,error_rel:null}]:[]),...e.iteraciones.slice(-2)].map(i=>`<tr><td>${i.numero}</td><td class="l">${esc((i.aproximacion||[]).slice(0,5).map(x=>fx(x)).join(', '))}</td><td>${fx(i.residual)}</td><td>${fx(i.error_abs)}</td><td>${fx(i.error_rel)}</td></tr>`).join('')}</table></div></details>`).join('')}</div>
+  <div class="two"><div class="card"><h4>Gráfico 1 · Convergencia (log₁₀)</h4><canvas id="g1" width="520" height="240"></canvas></div><div class="card"><h4 id="t2">Gráfico 2</h4><canvas id="g2" width="520" height="240"></canvas></div></div>
+  <div class="two"><div class="card"><h4>Conclusión numérica</h4><p>${esc(d.conclusiones?.numerica)}</p></div><div class="card"><h4>Conclusión del problema</h4><p>${esc(d.conclusiones?.problema)}</p></div></div>`
+  :`<div class="card"><p class="mut">Este problema está <b>PENDIENTE</b>: pulse «Ejecutar» para calcular y guardar los resultados.</p></div>`);
+ if(ej.length)graficos(d)}
+const COL=['#d9534f','#3b82f6','#22a06b','#e69f00','#8e44ad','#16a2b8','#795548'];
+function linea(id,ser,o={}){const c=$(id),g=c.getContext('2d'),W=c.width,H=c.height,tx=getComputedStyle(document.body).color;g.clearRect(0,0,W,H);g.fillStyle=tx;g.font='11px sans-serif';
+ const T=(v,l)=>l?Math.log10(v):v,pts=ser.flatMap(s=>s.p).filter(p=>isFinite(T(p[0],o.lx))&&isFinite(T(p[1],o.ly))&&(!o.ly||p[1]>0)&&(!o.lx||p[0]>0));if(!pts.length){g.fillText('Sin datos para graficar',20,30);return}
+ const xs=pts.map(p=>T(p[0],o.lx)),ys=pts.map(p=>T(p[1],o.ly));let x0=Math.min(...xs),x1=Math.max(...xs),y0=Math.min(...ys),y1=Math.max(...ys);if(x0===x1)x1=x0+1;if(y0===y1)y1=y0+1;
+ const X=v=>40+(W-55)*(T(v,o.lx)-x0)/(x1-x0),Y=v=>10+(H-45)*(y1-T(v,o.ly))/(y1-y0);g.strokeStyle='#8884';g.beginPath();g.moveTo(40,10);g.lineTo(40,H-35);g.lineTo(W-10,H-35);g.stroke();
+ [y0,y1].forEach(v=>g.fillText(o.ly?'1e'+v.toFixed(0):(+v.toPrecision(3)),2,Y(o.ly?Math.pow(10,v):v)+4));[x0,x1].forEach(v=>g.fillText(o.lx?'1e'+v.toFixed(1):(+v.toPrecision(3)),X(o.lx?Math.pow(10,v):v)-10,H-22));
+ ser.forEach((s,j)=>{g.strokeStyle=s.c||COL[j%7];g.lineWidth=2;g.beginPath();let st=false;s.p.forEach(p=>{if(!isFinite(T(p[1],o.ly))||(o.ly&&p[1]<=0)||(o.lx&&p[0]<=0)){st=false;return}st?g.lineTo(X(p[0]),Y(p[1])):g.moveTo(X(p[0]),Y(p[1]));st=true});g.stroke();g.fillStyle=s.c||COL[j%7];g.fillText(s.n,50+j*85,H-6)});
+ if(o.h!=null){g.strokeStyle='#d9534f';g.setLineDash([4,4]);g.beginPath();g.moveTo(40,Y(o.h));g.lineTo(W-10,Y(o.h));g.stroke();g.setLineDash([])}}
+function graficos(d){const ex=d.ejecuciones.filter(e=>e.iteraciones.length>1&&e.metodo!=='REFERENCIA_ANALITICA');
+ linea('g1',ex.map((e,j)=>({n:e.metodo.slice(0,8),p:e.iteraciones.map(i=>[i.numero,i.residual??i.error_abs])})),{ly:true});const P=d.parametros;
+ if(d.caso_id===1){$('t2').textContent='Gráfico 2 · Error en x_final vs paso h (log-log)';linea('g2',d.ejecuciones.filter(e=>e.resumen?.valor?.refinamiento).map(e=>({n:e.metodo.slice(0,8),p:e.resumen.valor.refinamiento})),{lx:true,ly:true})}
+ else if(d.caso_id===2){$('t2').textContent='Gráfico 2 · D(t) y umbral D*';const r=d.ejecuciones.find(e=>e.metodo==='REFERENCIA_ANALITICA').resumen.valor.t_umbral,p=[];for(let i=0;i<=60;i++){const t=1.3*r*i/60;p.push([t,P.D0+P.alpha*t+P.beta*t*t])}linea('g2',[{n:'D(t)',p}],{h:P.Dumbral})}
+ else{$('t2').textContent='Gráfico 2';linea('g2',[],{})}}
+init();
+</script></body></html>
